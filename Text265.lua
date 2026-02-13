@@ -1,16 +1,16 @@
 -- ======================
--- INSPECTOR MAN1 ESP (TOGGLE)
+-- PLAYER ESP (TOGGLE)
 -- ======================
 
-if _G.INSPECTOR_ESP then
-	_G.INSPECTOR_ESP = false
-	print("INSPECTOR ESP: OFF")
+if _G.PLAYER_ESP then
+	_G.PLAYER_ESP = false
+	print("PLAYER ESP: OFF")
 
-	if _G.INSPECTOR_ESP_DATA then
-		for model, highlight in pairs(_G.INSPECTOR_ESP_DATA) do
-			if highlight then
+	if _G.PLAYER_ESP_DATA then
+		for player, box in pairs(_G.PLAYER_ESP_DATA) do
+			if box then
 				pcall(function()
-					highlight:Destroy()
+					box:Destroy()
 				end)
 			end
 		end
@@ -19,99 +19,106 @@ if _G.INSPECTOR_ESP then
 	return
 end
 
-_G.INSPECTOR_ESP = true
-_G.INSPECTOR_ESP_DATA = {}
-print("INSPECTOR ESP: ON")
+_G.PLAYER_ESP = true
+_G.PLAYER_ESP_DATA = {}
+print("PLAYER ESP: ON")
 
 -- ======================
 -- SERVICIOS
 -- ======================
-local RunService = game:GetService("RunService")
-local humFolder = workspace:WaitForChild("Hum")
-
-local ESPs = _G.INSPECTOR_ESP_DATA
+local Players = game:GetService("Players")
+local ESPs = _G.PLAYER_ESP_DATA
 
 -- ======================
 -- FUNCIONES
 -- ======================
-local function getMainPart(model)
-	return model:FindFirstChild("HumanoidRootPart")
-		or model:FindFirstChildWhichIsA("BasePart")
+local function getMainPart(character)
+	return character:FindFirstChild("HumanoidRootPart")
+		or character:FindFirstChildWhichIsA("BasePart")
 end
 
-local function createESP(manModel)
-	if not _G.INSPECTOR_ESP then return end
+local function createESP(player)
+	if not _G.PLAYER_ESP then return end
+	if player == Players.LocalPlayer then return end
+	if ESPs[player] then return end
+	
+	local function setupCharacter(character)
+		if not _G.PLAYER_ESP then return end
 
-	local parentModel = manModel.Parent
-	if not parentModel then return end
-	if ESPs[parentModel] then return end
-
-	local mainPart = getMainPart(manModel)
-	if not mainPart then return end
-
-	local highlight = Instance.new("Highlight")
-	highlight.Adornee = manModel
-	highlight.FillColor = Color3.fromRGB(255, 0, 0)
-	highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
-	highlight.FillTransparency = 0.4
-	highlight.OutlineTransparency = 0
-	highlight.Parent = workspace
-
-	local size = manModel:GetExtentsSize()
-	local offsetY = size.Y/2 + 1.5
-
-	local billboard = Instance.new("BillboardGui")
-	billboard.Adornee = mainPart
-	billboard.Size = UDim2.new(0,120,0,30)
-	billboard.StudsOffset = Vector3.new(0, offsetY, 0)
-	billboard.AlwaysOnTop = true
-	billboard.Parent = highlight
-
-	local text = Instance.new("TextLabel")
-	text.Size = UDim2.new(1,0,1,0)
-	text.BackgroundTransparency = 1
-	text.Text = parentModel.Name
-	text.TextColor3 = Color3.fromRGB(255, 0, 0)
-	text.TextStrokeTransparency = 0
-	text.TextStrokeColor3 = Color3.new(0,0,0)
-	text.TextSize = 30
-	text.Font = Enum.Font.GothamBold
-	text.Parent = billboard
-
-	ESPs[parentModel] = highlight
+		local mainPart = getMainPart(character)
+		if not mainPart then return end
+		
+		local size = character:GetExtentsSize()
+		
+		-- Box blanco
+		local box = Instance.new("BoxHandleAdornment")
+		box.Adornee = mainPart
+		box.Size = size
+		box.AlwaysOnTop = true
+		box.ZIndex = 5
+		box.Color3 = Color3.fromRGB(255,255,255)
+		box.Transparency = 0.7
+		box.Parent = mainPart
+		
+		-- Nombre arriba (DisplayName)
+		local offsetY = size.Y/2 + 1.5
+		
+		local billboard = Instance.new("BillboardGui")
+		billboard.Adornee = mainPart
+		billboard.Size = UDim2.new(0,140,0,30)
+		billboard.StudsOffset = Vector3.new(0, offsetY, 0)
+		billboard.AlwaysOnTop = true
+		billboard.Parent = box
+		
+		local text = Instance.new("TextLabel")
+		text.Size = UDim2.new(1,0,1,0)
+		text.BackgroundTransparency = 1
+		text.Text = player.DisplayName
+		text.TextColor3 = Color3.fromRGB(255,255,255)
+		text.TextStrokeTransparency = 0
+		text.TextStrokeColor3 = Color3.new(0,0,0)
+		text.TextSize = 16
+		text.Font = Enum.Font.GothamBold
+		text.Parent = billboard
+		
+		ESPs[player] = box
+	end
+	
+	if player.Character then
+		setupCharacter(player.Character)
+	end
+	
+	player.CharacterAdded:Connect(function(char)
+		if ESPs[player] then
+			pcall(function()
+				ESPs[player]:Destroy()
+			end)
+			ESPs[player] = nil
+		end
+		setupCharacter(char)
+	end)
 end
 
-local function removeESP(parentModel)
-	if ESPs[parentModel] then
+local function removeESP(player)
+	if ESPs[player] then
 		pcall(function()
-			ESPs[parentModel]:Destroy()
+			ESPs[player]:Destroy()
 		end)
-		ESPs[parentModel] = nil
+		ESPs[player] = nil
 	end
 end
 
 -- ======================
--- LOOP
+-- INICIALIZAR
 -- ======================
-RunService.RenderStepped:Connect(function()
+for _, player in pairs(Players:GetPlayers()) do
+	createESP(player)
+end
 
-	if not _G.INSPECTOR_ESP then return end
+Players.PlayerAdded:Connect(function(player)
+	createESP(player)
+end)
 
-	local activeModels = {}
-
-	for _, obj in pairs(humFolder:GetDescendants()) do
-		if obj:IsA("Model") and obj.Name == "Man1" then
-			if obj.Parent and obj.Parent.Name:match("Inspector") then
-				activeModels[obj.Parent] = obj
-				createESP(obj)
-			end
-		end
-	end
-
-	for model,_ in pairs(ESPs) do
-		if not activeModels[model] then
-			removeESP(model)
-		end
-	end
-
+Players.PlayerRemoving:Connect(function(player)
+	removeESP(player)
 end)
